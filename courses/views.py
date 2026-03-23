@@ -1,0 +1,182 @@
+from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.permissions import AllowAny
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiExample,
+    OpenApiResponse,
+    OpenApiParameter,
+)
+from drf_spectacular.types import OpenApiTypes
+from .models import Category, Course
+from .serializers import CategorySerializer, CourseDetailSerializer
+from .permissions import HasActiveSubscription
+from .pagination import CategoryPagination
+
+
+@extend_schema(
+    tags=["Courses"],
+    summary="Get categories with courses",
+    description=(
+        "Returns a paginated list of categories with their nested courses.\n\n"
+        "Accessible by both authenticated and unauthenticated users.\n\n"
+        "**Pagination Parameters:**\n"
+        "- `page`: Page number (default: 1)\n"
+        "- `page_size`: Number of categories per page (default: 10, max: 100)\n\n"
+        "**Example:** `/api/categories/?page=1&page_size=5`"
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="page",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Page number",
+            required=False,
+            default=1,
+        ),
+        OpenApiParameter(
+            name="page_size",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Number of categories returned per page",
+            required=False,
+            default=10,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=CategorySerializer,
+            description="List of categories with nested courses",
+            examples=[
+                OpenApiExample(
+                    "Category List Response",
+                    summary="Example category list response",
+                    description="Paginated response with categories and courses",
+                    value={
+                        "total_category": 10,
+                        "result": [
+                            {
+                                "code": "B017",
+                                "name": "Педагогика",
+                                "description": "Description of Pedagogy category",
+                                "image": "/media/categories/pedagogy.jpg",
+                                "courses": [
+                                    {
+                                        "slug": "python-basics",
+                                        "name": "Python Basics",
+                                        "description": "Learn Python from scratch",
+                                        "image": "/media/courses/python.png",
+                                        "is_free": True,
+                                        "cost": None,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                )
+            ],
+        )
+    },
+)
+class CategoryListView(ListAPIView):
+    """
+    API view for listing categories with nested courses.
+    Public endpoint, paginated.
+    """
+
+    queryset = Category.objects.prefetch_related("courses").all()
+    serializer_class = CategorySerializer
+    permission_classes = [AllowAny]
+    pagination_class = CategoryPagination
+
+
+@extend_schema(
+    tags=["Courses"],
+    summary="Get course details",
+    description=(
+        "Returns detailed information about a specific course.\n\n"
+        "**Access Rules:**\n"
+        "- If `is_free` is `true`: accessible by everyone\n"
+        "- If `is_free` is `false`: requires authentication and active subscription\n\n"
+        "**Path Parameter:**\n"
+        "- `slug`: Unique slug of the course"
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="slug",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description="Unique slug of the course",
+            required=True,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=CourseDetailSerializer,
+            description="Course details",
+            examples=[
+                OpenApiExample(
+                    "Course Detail Response",
+                    summary="Example course detail response",
+                    description="Detailed course information",
+                    value={
+                        "category": "Педагогика",
+                        "slug": "python-basics",
+                        "name": "Python Basics",
+                        "description": "Learn Python from scratch",
+                        "image": "/media/courses/python.png",
+                        "is_free": False,
+                        "cost": "9.99",
+                    },
+                )
+            ],
+        ),
+        401: OpenApiResponse(
+            description="Authentication credentials were not provided",
+            examples=[
+                OpenApiExample(
+                    "Unauthorized",
+                    summary="Authentication required",
+                    description="User is not authenticated",
+                    value={"detail": "Authentication credentials were not provided."},
+                )
+            ],
+        ),
+        403: OpenApiResponse(
+            description="Active subscription required to access this course",
+            examples=[
+                OpenApiExample(
+                    "Forbidden",
+                    summary="Subscription required",
+                    description="User does not have active subscription",
+                    value={"detail": "Active subscription required to access this course"},
+                )
+            ],
+        ),
+        404: OpenApiResponse(
+            description="Course not found",
+            examples=[
+                OpenApiExample(
+                    "Not Found",
+                    summary="Course does not exist",
+                    description="Course with given slug not found",
+                    value={"detail": "Course not found"},
+                )
+            ],
+        ),
+    },
+)
+class CourseDetailView(RetrieveAPIView):
+    """
+    API view for course detail.
+    Requires authentication and active subscription if not free.
+    """
+
+    queryset = Course.objects.select_related("category").all()
+    serializer_class = CourseDetailSerializer
+    permission_classes = [HasActiveSubscription]
+    lookup_field = "slug"
+
+    def get_object(self):
+        slug = self.kwargs.get("slug")
+        return get_object_or_404(Course, slug=slug)
