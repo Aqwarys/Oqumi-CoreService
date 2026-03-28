@@ -251,14 +251,6 @@ Access the Django Admin panel at:
 http://127.0.0.1:8000/admin/
 ```
 
-### Manageable Entities
-
-- **Tariffs**: Create and manage subscription plans
-- **Categories**: Organize courses into categories
-- **Courses**: Create and manage course content
-- **Users**: View and manage user accounts
-- **Subscriptions**: Monitor user subscriptions
-
 ### Admin Features
 
 - User management with role-based permissions
@@ -294,13 +286,6 @@ The API uses Django REST Framework's permission system:
 - **JWT Security**: Use secure token storage and proper expiration times
 - **Input Validation**: Always validate user input through serializers
 - **Permission Checks**: Implement proper permission checks for all endpoints
-
-### Performance
-
-- **Database Queries**: Use `select_related()` and `prefetch_related()` to optimize queries
-- **Pagination**: Always paginate list endpoints
-- **Caching**: Consider caching for frequently accessed data
-- **Media Optimization**: Optimize image sizes and consider CDN for production
 
 ## 🤝 Contributing
 
