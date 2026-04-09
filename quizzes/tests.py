@@ -1,3 +1,6 @@
 from django.test import TestCase
 
-# Create your tests here.
+
+class QuizzesSmokeTest(TestCase):
+    def test_quizzes_app_imports(self):
+        self.assertTrue(True)
