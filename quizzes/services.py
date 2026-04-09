@@ -6,75 +6,83 @@ from rest_framework.exceptions import ValidationError
 from .models import Question, Quiz
 
 
+def validate_quiz_data(data: dict[str, Any]) -> None:
+    course = data.get("course")
+    lesson = data.get("lesson")
+    is_free = data.get("is_free", True)
+    cost = data.get("cost")
+
+    if bool(course) == bool(lesson):
+        raise ValidationError("Exactly one of 'course' or 'lesson' must be provided.")
+
+    if is_free is False and cost is None:
+        raise ValidationError({"cost": "Cost is required when quiz is not free."})
+
+
 @transaction.atomic
-def update_quiz_with_questions(*, quiz: Quiz, quiz_data: dict[str, Any], questions_data: list[dict[str, Any]]) -> Quiz:
-    quiz_serializer_fields = ["title", "description", "is_free", "cost", "course", "lesson", "image"]
-    for field in quiz_serializer_fields:
-        if field in quiz_data:
-            setattr(quiz, field, quiz_data[field])
+def update_quiz_with_questions(quiz: Quiz, validated_data: dict[str, Any]) -> Quiz:
+    questions_data = validated_data.pop("questions", None)
+
+    for field, value in validated_data.items():
+        setattr(quiz, field, value)
+    quiz.full_clean()
     quiz.save()
 
-    existing_questions = {question.id: question for question in quiz.questions.all()}
-    incoming_ids: set[int] = set()
+    if questions_data is None:
+        return quiz
 
+    incoming_ids = set()
     for question_payload in questions_data:
-        question_id = question_payload.get("id")
-
+        question_id = question_payload.pop("id", None)
         if question_id is not None:
-            if question_id not in existing_questions:
-                raise ValidationError({"questions": [f"Question id={question_id} does not belong to this quiz."]})
-
             incoming_ids.add(question_id)
-            question = existing_questions[question_id]
-            for field in ["type", "content", "image", "options", "correct", "score", "explanation"]:
-                if field in question_payload:
-                    setattr(question, field, question_payload[field])
+            try:
+                question = quiz.questions.get(id=question_id)
+            except Question.DoesNotExist as exc:
+                raise ValidationError(
+                    {"questions": [f"Question with id={question_id} does not belong to this quiz."]}
+                ) from exc
+
+            for field, value in question_payload.items():
+                setattr(question, field, value)
+            question.full_clean()
             question.save()
         else:
-            Question.objects.create(
-                quiz=quiz,
-                type=question_payload["type"],
-                content=question_payload["content"],
-                image=question_payload.get("image"),
-                options=question_payload["options"],
-                correct=question_payload["correct"],
-                score=question_payload.get("score", 1),
-                explanation=question_payload["explanation"],
-            )
+            question = Question(quiz=quiz, **question_payload)
+            question.full_clean()
+            question.save()
+            incoming_ids.add(question.id)
 
-    to_delete = [q_id for q_id in existing_questions if q_id not in incoming_ids]
-    if to_delete:
-        Question.objects.filter(id__in=to_delete, quiz=quiz).delete()
-
+    quiz.questions.exclude(id__in=incoming_ids).delete()
     return quiz
 
 
-def check_quiz_answers(*, quiz: Quiz, answers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    answers_map = {item["question_id"]: item.get("selected", []) for item in answers}
-    question_map = {question.id: question for question in quiz.questions.all()}
+def _normalize_selected(selected: list[int]) -> list[int]:
+    if not isinstance(selected, list) or not all(isinstance(v, int) for v in selected):
+        raise ValidationError("Each 'selected' value must be an array of integer indexes.")
+    return selected
 
-    unknown_question_ids = [q_id for q_id in answers_map if q_id not in question_map]
-    if unknown_question_ids:
-        raise ValidationError({"answers": [f"Unknown question_id(s): {unknown_question_ids}"]})
 
-    results: list[dict[str, Any]] = []
-    for question in quiz.questions.all():
-        if question.id not in answers_map:
-            continue
+def check_quiz_answers(quiz: Quiz, answers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    questions_map = {question.id: question for question in quiz.questions.all()}
+    response: list[dict[str, Any]] = []
 
-        selected = answers_map[question.id]
-        correct = question.correct
+    for answer in answers:
+        question_id = answer.get("question_id")
+        selected = _normalize_selected(answer.get("selected", []))
 
-        if question.type == Question.TYPE_SINGLE:
-            is_correct = selected == correct
-        elif question.type == Question.TYPE_MULTIPLE:
-            is_correct = set(selected) == set(correct)
-        elif question.type == Question.TYPE_ORDERING:
-            is_correct = selected == correct
+        question = questions_map.get(question_id)
+        if question is None:
+            raise ValidationError({"answers": [f"Question with id={question_id} was not found in this quiz."]})
+
+        if question.type == Question.QuestionType.SINGLE:
+            is_correct = selected == question.correct
+        elif question.type == Question.QuestionType.MULTIPLE:
+            is_correct = set(selected) == set(question.correct)
         else:
-            is_correct = False
+            is_correct = selected == question.correct
 
-        results.append(
+        response.append(
             {
                 "question_id": question.id,
                 "is_correct": is_correct,
@@ -84,4 +92,4 @@ def check_quiz_answers(*, quiz: Quiz, answers: list[dict[str, Any]]) -> list[dic
             }
         )
 
-    return results
+    return response
