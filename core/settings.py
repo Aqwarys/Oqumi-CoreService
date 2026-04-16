@@ -182,6 +182,9 @@ STORAGES = {
             "bucket_name": GS_BUCKET_NAME,
         },
     },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
 }
 
 
