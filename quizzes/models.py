@@ -2,8 +2,6 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
-
-from courses.models import Course
 from lessons.models import Lesson
 
 
@@ -11,34 +9,17 @@ class Quiz(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["is_free"]),
-            models.Index(fields=["course"]),
             models.Index(fields=["lesson"]),
         ]
         constraints = [
-            models.CheckConstraint(
-                condition=(
-                    (Q(course__isnull=False) & Q(lesson__isnull=True))
-                    | (Q(course__isnull=True) & Q(lesson__isnull=False))
-                ),
-                name="quiz_exactly_one_target",
-            ),
             models.CheckConstraint(
                 condition=Q(is_free=True) | Q(cost__isnull=False),
                 name="quiz_cost_required_when_paid",
             ),
         ]
 
-    course = models.ForeignKey(
-        Course,
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="quizzes",
-    )
     lesson = models.ForeignKey(
         Lesson,
-        null=True,
-        blank=True,
         on_delete=models.CASCADE,
         related_name="quizzes",
     )
@@ -52,10 +33,8 @@ class Quiz(models.Model):
         return self.title
 
     def clean(self):
-        if (self.course is None and self.lesson is None) or (
-            self.course is not None and self.lesson is not None
-        ):
-            raise ValidationError("Exactly one of 'course' or 'lesson' must be set.")
+        if self.lesson is None:
+            raise ValidationError({"lesson": "Lesson is required for quiz."})
 
         if not self.is_free and self.cost is None:
             raise ValidationError({"cost": "Cost is required for paid quizzes."})

@@ -74,22 +74,15 @@ def get_user_statistics(*, user) -> dict:
 def get_user_attempted_quizzes(*, user) -> QuerySet[Quiz]:
     return (
         Quiz.objects.filter(attempts__user=user)
-        .select_related("course", "lesson")
+        .select_related("lesson")
         .prefetch_related("questions")
         .distinct()
         .order_by("id")
     )
 
 
-def get_quiz_by_course_id(*, course_id: int) -> Quiz:
-    return get_object_or_404(
-        Quiz.objects.select_related("course", "lesson").prefetch_related("questions"),
-        course_id=course_id,
-    )
-
-
 def get_quiz_by_lesson_id(*, lesson_id: int) -> Quiz:
     return get_object_or_404(
-        Quiz.objects.select_related("course", "lesson").prefetch_related("questions"),
+        Quiz.objects.select_related("lesson").prefetch_related("questions"),
         lesson_id=lesson_id,
     )

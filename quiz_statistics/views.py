@@ -64,8 +64,7 @@ class UserStatisticsView(APIView):
                     value=[
                         {
                             "id": 1,
-                            "course": 2,
-                            "lesson": None,
+                            "lesson": 10,
                             "title": "Python Basics Quiz",
                             "description": "Answer questions to complete module.",
                             "is_free": True,
