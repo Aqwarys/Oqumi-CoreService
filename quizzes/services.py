@@ -8,13 +8,12 @@ from .models import Question, Quiz
 
 
 def validate_quiz_data(data: dict[str, Any]) -> None:
-    course = data.get("course")
     lesson = data.get("lesson")
     is_free = data.get("is_free", True)
     cost = data.get("cost")
 
-    if bool(course) == bool(lesson):
-        raise ValidationError("Exactly one of 'course' or 'lesson' must be provided.")
+    if lesson is None:
+        raise ValidationError({"lesson": "Lesson is required."})
 
     if is_free is False and cost is None:
         raise ValidationError({"cost": "Cost is required when quiz is not free."})

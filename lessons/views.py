@@ -384,7 +384,6 @@ class LessonUpdateView(APIView):
                     value={
                         "quiz": {
                             "id": 2,
-                            "course": None,
                             "lesson": 10,
                             "title": "Lesson Quiz",
                             "description": "Lesson check",

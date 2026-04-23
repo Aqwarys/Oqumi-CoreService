@@ -10,7 +10,7 @@ class QuestionInline(admin.TabularInline):
 
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "is_free", "cost", "course", "lesson")
+    list_display = ("id", "title", "lesson", "is_free", "cost")
     search_fields = ("title",)
     list_filter = ("is_free",)
     inlines = [QuestionInline]

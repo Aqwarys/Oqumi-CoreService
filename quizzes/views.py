@@ -20,7 +20,6 @@ from .serializers import (
     QuestionFilterSerializer,
     QuizCheckResultSerializer,
     QuizCheckSerializer,
-    QuizDetailSerializer,
     QuizDetailWithAttemptSerializer,
     QuizEditSerializer,
     QuizSerializer,
@@ -34,7 +33,7 @@ from .services import (
 
 
 class QuizAccessMixin:
-    queryset = Quiz.objects.prefetch_related("questions").all()
+    queryset = Quiz.objects.select_related("lesson").prefetch_related("questions").all()
 
     def get_quiz(self, quiz_id: int) -> Quiz:
         return get_object_or_404(self.queryset, id=quiz_id)
@@ -62,8 +61,7 @@ class QuizAccessMixin:
                     "Quiz Creation",
                     value={
                         "id": 1,
-                        "course": 1,
-                        "lesson": None,
+                        "lesson": 10,
                         "title": "Python Basics Quiz",
                         "description": "Final quiz for Python basics module.",
                         "is_free": False,
@@ -117,8 +115,7 @@ class QuizCreateView(APIView):
                     value={
                         "quiz": {
                             "id": 1,
-                            "course": 1,
-                            "lesson": None,
+                            "lesson": 10,
                             "title": "Python Basics Quiz",
                             "description": "Answer questions to complete module.",
                             "is_free": True,
@@ -142,8 +139,7 @@ class QuizCreateView(APIView):
                     value={
                         "quiz": {
                             "id": 1,
-                            "course": 1,
-                            "lesson": None,
+                            "lesson": 10,
                             "title": "Python Basics Quiz",
                             "description": "Answer questions to complete module.",
                             "is_free": True,
@@ -277,8 +273,7 @@ class QuizEditView(QuizAccessMixin, APIView):
                     "Quiz Full Update",
                     value={
                         "id": 1,
-                        "course": 1,
-                        "lesson": None,
+                        "lesson": 10,
                         "title": "Python Basics Quiz (Updated)",
                         "description": "Updated quiz content.",
                         "is_free": False,

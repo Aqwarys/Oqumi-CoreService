@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from lessons.models import Lesson
+
 from .models import Question, Quiz
 from .services import validate_quiz_data
 
@@ -62,11 +64,12 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuizSerializer(serializers.ModelSerializer):
+    lesson = serializers.PrimaryKeyRelatedField(queryset=Lesson.objects.all(), required=True)
+
     class Meta:
         model = Quiz
         fields = [
             "id",
-            "course",
             "lesson",
             "title",
             "description",
@@ -77,7 +80,6 @@ class QuizSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         merged = {
-            "course": attrs.get("course", getattr(self.instance, "course", None)),
             "lesson": attrs.get("lesson", getattr(self.instance, "lesson", None)),
             "is_free": attrs.get("is_free", getattr(self.instance, "is_free", True)),
             "cost": attrs.get("cost", getattr(self.instance, "cost", None)),
@@ -99,7 +101,6 @@ class QuizDetailSerializer(serializers.ModelSerializer):
         model = Quiz
         fields = [
             "id",
-            "course",
             "lesson",
             "title",
             "description",
@@ -117,7 +118,6 @@ class QuizEditSerializer(serializers.ModelSerializer):
         model = Quiz
         fields = [
             "id",
-            "course",
             "lesson",
             "title",
             "description",
@@ -129,7 +129,6 @@ class QuizEditSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         merged = {
-            "course": attrs.get("course", getattr(self.instance, "course", None)),
             "lesson": attrs.get("lesson", getattr(self.instance, "lesson", None)),
             "is_free": attrs.get("is_free", getattr(self.instance, "is_free", True)),
             "cost": attrs.get("cost", getattr(self.instance, "cost", None)),
