@@ -9,6 +9,11 @@ class ModuleInline(admin.TabularInline):
     extra = 1
 
 
+class ProblemInline(admin.TabularInline):
+    model = Problem
+    extra = 1
+
+
 @admin.register(Subject)
 class SubjectAdmin(admin.ModelAdmin):
     list_display = ["name", "type", "duration_sec", "max_score"]
@@ -23,6 +28,7 @@ class ModuleAdmin(admin.ModelAdmin):
     list_display = ["title", "subject"]
     list_filter = ["subject"]
     search_fields = ["title", "subject__name"]
+    inlines = [ProblemInline]
 
 
 @admin.register(Problem)
