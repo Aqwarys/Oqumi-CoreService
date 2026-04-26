@@ -176,8 +176,9 @@ SPECTACULAR_SETTINGS = {
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-GS_IAM_SIGN_BLOB = True
+#GS_IAM_SIGN_BLOB = True
 GS_BUCKET_NAME = "bilimly-projectx-media"
+GS_QUERYSTRING_AUTH = False
 
 
 if DEBUG:
