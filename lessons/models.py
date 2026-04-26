@@ -73,7 +73,7 @@ class Lesson(models.Model):
 
     def clean(self):
         # Validation: Lesson must belong to a course
-        if not self.course:
+        if not self.course_id:
             raise ValidationError("Lesson must belong to a course.")
 
         # Validation: Cannot publish without content

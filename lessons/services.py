@@ -4,6 +4,7 @@ Services module for lessons app.
 Contains business logic functions that can be reused across views.
 """
 
+import json
 import logging
 from typing import Any
 
@@ -104,6 +105,16 @@ def _extract_image_urls_from_content(content):
 logger = logging.getLogger(__name__)
 
 
+def _truncate_for_log(value: Any, max_len: int = 2000) -> str:
+    if isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=True)
+    else:
+        text = str(value)
+    if len(text) <= max_len:
+        return text
+    return f"{text[:max_len]}...<truncated>"
+
+
 def call_llm_service(payload: dict[str, Any]) -> dict[str, Any] | None:
     base_url = getattr(settings, "LLM_SERVICE_URL", None)
     if not base_url:
@@ -121,11 +132,16 @@ def call_llm_service(payload: dict[str, Any]) -> dict[str, Any] | None:
                     response.status_code,
                     attempt + 1,
                 )
+                logger.info(
+                    "LLM error response body=%s",
+                    _truncate_for_log(response.text),
+                )
                 continue
             data = response.json()
             if not isinstance(data, dict):
                 logger.warning("LLM service returned non-object JSON")
                 return None
+            logger.info("LLM response payload=%s", _truncate_for_log(data))
             return data
         except requests.RequestException:
             logger.exception("LLM service request failed on attempt=%s", attempt + 1)
@@ -137,38 +153,38 @@ def call_llm_service(payload: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def validate_llm_question(data: dict[str, Any]) -> dict[str, Any] | None:
+def validate_llm_question(data: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
     required_fields = {"type", "content", "options", "correct", "explanation"}
     if not isinstance(data, dict) or not required_fields.issubset(data.keys()):
-        return None
+        return None, "missing required fields"
 
     q_type = data.get("type")
     if q_type not in {"single", "multiple", "ordering"}:
-        return None
+        return None, "invalid type"
 
     content = data.get("content")
-    if not isinstance(content, list):
-        return None
+    if not isinstance(content, (list, dict)):
+        return None, "invalid content"
 
     options = data.get("options")
     if not isinstance(options, list) or len(options) == 0 or len(options) > 15:
-        return None
-    if not all(isinstance(option, str) for option in options):
-        return None
+        return None, "invalid options"
 
     correct = data.get("correct")
+    if isinstance(correct, int):
+        correct = [correct]
     if not isinstance(correct, list) or not all(isinstance(i, int) for i in correct):
-        return None
+        return None, "invalid correct"
 
     if any(i < 0 or i >= len(options) for i in correct):
-        return None
+        return None, "correct index out of range"
 
     if q_type == "single" and len(correct) != 1:
-        return None
+        return None, "single question must have one correct"
     if q_type == "multiple" and len(correct) < 1:
-        return None
+        return None, "multiple question must have at least one correct"
     if q_type == "ordering" and correct != list(range(len(options))):
-        return None
+        return None, "ordering correct must match full order"
 
     explanation = data.get("explanation")
     if (
@@ -176,7 +192,7 @@ def validate_llm_question(data: dict[str, Any]) -> dict[str, Any] | None:
         or len(explanation) == 0
         or len(explanation) > 256
     ):
-        return None
+        return None, "invalid explanation"
 
     payload: dict[str, Any] = {
         "type": q_type,
@@ -190,7 +206,7 @@ def validate_llm_question(data: dict[str, Any]) -> dict[str, Any] | None:
     if isinstance(score, int) and 1 <= score <= 5:
         payload["score"] = score
 
-    return payload
+    return payload, "ok"
 
 
 @transaction.atomic
@@ -240,10 +256,14 @@ def generate_quiz_from_lesson(lesson) -> None:
 
     valid_questions: list[dict[str, Any]] = []
     for idx, question_data in enumerate(questions, start=1):
-        cleaned = validate_llm_question(question_data)
+        cleaned, reason = validate_llm_question(question_data)
         if cleaned is None:
             logger.warning(
-                "Skipping invalid LLM question index=%s for quiz_id=%s", idx, quiz.id
+                "Skipping invalid LLM question index=%s for quiz_id=%s reason=%s data=%s",
+                idx,
+                quiz.id,
+                reason,
+                _truncate_for_log(question_data),
             )
             continue
         valid_questions.append(cleaned)
