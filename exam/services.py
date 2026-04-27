@@ -21,6 +21,59 @@ def distribute_questions(total_questions: int, module_count: int) -> list[int]:
     return [base + 1 if index < remainder else base for index in range(module_count)]
 
 
+def _allocate_questions_by_capacity(
+    total_questions: int, module_problem_counts: list[int]
+) -> list[int]:
+    if total_questions <= 0:
+        raise ValidationError("Total questions must be greater than 0.")
+    if not module_problem_counts:
+        raise ValidationError("Subject must have at least one module.")
+    if any(count <= 0 for count in module_problem_counts):
+        raise ValidationError("Each module must have at least one problem.")
+
+    module_count = len(module_problem_counts)
+    even_allocations = distribute_questions(total_questions, module_count)
+    if all(
+        allocation <= capacity
+        for allocation, capacity in zip(even_allocations, module_problem_counts)
+    ):
+        return even_allocations
+
+    total_capacity = sum(module_problem_counts)
+    if total_questions > total_capacity:
+        raise ValidationError("Subject has insufficient problems.")
+
+    raw_shares = [
+        total_questions * (capacity / total_capacity)
+        for capacity in module_problem_counts
+    ]
+    allocations = [
+        min(int(share), capacity)
+        for share, capacity in zip(raw_shares, module_problem_counts)
+    ]
+    remainder = total_questions - sum(allocations)
+
+    fractional_order = sorted(
+        range(module_count),
+        key=lambda i: (raw_shares[i] - int(raw_shares[i])),
+        reverse=True,
+    )
+
+    while remainder > 0:
+        progress = False
+        for index in fractional_order:
+            if remainder == 0:
+                break
+            if allocations[index] < module_problem_counts[index]:
+                allocations[index] += 1
+                remainder -= 1
+                progress = True
+        if not progress:
+            break
+
+    return allocations
+
+
 def shuffle_questions(problems: list[Problem]) -> list[Problem]:
     random.shuffle(problems)
     return problems
@@ -74,15 +127,14 @@ def build_exam(subject: Subject) -> dict[str, Any]:
                 f"Subject '{exam_subject.name}' must have at least one module."
             )
 
-        allocations = distribute_questions(exam_subject.max_score, len(modules))
+        module_problem_counts = [module.problems.count() for module in modules]
+        allocations = _allocate_questions_by_capacity(
+            exam_subject.max_score, module_problem_counts
+        )
 
         selected_problem_ids: list[int] = []
         for module, allocation in zip(modules, allocations):
             module_problem_ids = [problem.id for problem in module.problems.all()]
-            if not module_problem_ids:
-                raise ValidationError(
-                    f"Module '{module.title}' in subject '{exam_subject.name}' has no problems."
-                )
             if allocation > len(module_problem_ids):
                 raise ValidationError(
                     f"Module '{module.title}' in subject '{exam_subject.name}' has insufficient problems."
